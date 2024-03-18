@@ -7,120 +7,28 @@ class ZTMStopCard extends HTMLElement {
   
   version() { return "0.2.0"; }
   
-  _getAttributes(hass, filter1) {
+  _getAttributes(hass, departures) {
     var inmin = new Array(); //time delta
     var routeid = new Array(); //line number
     var vehicle = new Array(); //bus or tram
     var headsign = new Array(); //direction
     var icon = new Array();
-    var routeobjarray = [];
     var station; //stop, station name
-    var items; //counter in array
-    
-    function _filterName(stateObj, pattern) {
-      let parts;
-      let attr_id;
-      let attribute;
+    var departure_objects = new Array();
 
-      if (typeof (pattern) === "object") {
-        parts = pattern["key"].split(".");
-        attribute = pattern["key"];
-      } else {
-        parts = pattern.split(".");
-        attribute = pattern;
-      }
-      attr_id = parts[2];
-
-      if (attr_id.indexOf('*') === -1) {
-        return stateObj == attribute;
-      }
-      const regEx = new RegExp(`^${attribute.replace(/\*/g, '.*')}$`, 'i');
-      return stateObj.search(regEx) === 0;
-    }
-    
-    var supportedItems = 8;
-    var filters1 = new Array();
-      filters1[3] = {key: "sensor."+ filter1 + ".direction"};
-      filters1[2] = {key: "sensor."+ filter1 + ".departures"};
-	  filters1[1] = {key: "sensor."+ filter1 + ".friendly_name"};
-    
-    const attributes = new Map();
-    filters1.forEach((filter) => {
-      const filters = [];
-
-      filters.push(stateObj => _filterName(stateObj, filter));
-
-      Object.keys(hass.states).sort().forEach(key => {
-        Object.keys(hass.states[key].attributes).sort().forEach(attr_key => {
-          if (filters.every(filterFunc => filterFunc(`${key}.${attr_key}`))) {
-            attributes.set(`${key}.${attr_key}`, {
-              value: `${hass.states[key].attributes[attr_key]} ${filter.unit||''}`.trim(),
-            });
-          }  
+    for (let i = 0; i < departures.length(); ++i) {
+        d = departures[i];
+        departure_objects.push({
+            route: d.routeId,
+            vehicle: "tram",
+            inmin: "6 min"
+            headsign: d.headsign,
+            icon: "tram",
+            station: "Obrońców Westerplatte"
         });
-      });
-    });
-
-    var attr = Array.from(attributes.keys());
-    var re = /\d$/;
-    attr.forEach(key => {
-      var newkey = key.split('.')[2];
-		
-        switch (newkey) {
-          case 'departures':
-            inmin=attributes.get(key).value.split(",");
-            break;
-          case 'direction':
-            headsign=attributes.get(key).value.split(",");
-            break;
-		  case 'friendly_name':
-            station=attributes.get(key).value;
-            break;
-        }
-      items = attributes.get(key).value.split(",").length;
-      routeid = key.split("_")[1];
-      if (/^\d{2}$/.test(routeid)) {
-        vehicle = "tram";
-        icon="tram";
-      } else if (/^\d{3}$/.test(routeid)) {
-        vehicle = "bus";
-        icon="bus";
-      } else if (/^n{1}-{0,1}(\d{2})$/.test(routeid)) {
-        vehicle = "bus";
-        icon="bus";
-      } else if (/^l{1}-{0,1}(\d{1,2})$/.test(routeid)) {
-        vehicle = "bus";
-        icon="bus";
-      } else if (/^s{1}\d{1,2}$/.test(routeid)) {
-        vehicle = "rail";
-        icon="train";
-      } else if (/^m{1}\d{1}$/.test(routeid)) {
-        vehicle = "subway";
-        icon="train-variant";
-      }
-    });
-    if ( items > 0 ) {
-      for (var i=0; i < items; i++) {
-          routeobjarray.push({
-            key: routeid.toUpperCase(),
-            vehicle: vehicle,
-            inmin: inmin[i],
-            headsign: headsign[i],
-            icon: icon,
-            station: station
-          });
-      }
-    } else {
-      routeobjarray.push({
-        key: 'Brak linii',
-        vehicle: '',
-        inmin: '',
-        headsign: 'w kierunku',
-        icon: '',
-        station: station
-      }); 
     }
-    return Array.from(routeobjarray.values());
+
+    return departure_objects;
   }
   
   setConfig(config) {
@@ -207,7 +115,7 @@ class ZTMStopCard extends HTMLElement {
       ${attributes.map((attribute) => `
         <tr>
           <td class="${attribute.vehicle}"><ha-icon icon="mdi:${attribute.icon}"></td>
-          <td><span class="emp">${attribute.key}</span> w kierunku ${attribute.headsign} za ${attribute.inmin} min</td>
+          <td><span class="emp">${attribute.route}</span> w kierunku ${attribute.headsign} za ${attribute.inmin} min</td>
         </tr>
       `).join('')}
     `;
@@ -225,7 +133,9 @@ class ZTMStopCard extends HTMLElement {
     const config = this._config;
     const root = this.shadowRoot;
 
-    let attributes = this._getAttributes(hass, config.entity.split(".")[1]);
+    var state = hass.states[config.entity];
+
+    let attributes = this._getAttributes(hass, state.departures);
 
     this._updateStation(root.getElementById('station'), attributes);
     this._updateContent(root.getElementById('attributes'), attributes);
